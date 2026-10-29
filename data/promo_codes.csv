@@ -1,0 +1,7 @@
+promo_code,campaign,discount_type,discount_value,min_spend_eur,valid_from,valid_to,max_uses,channel_only,destination_only
+WELCOME10,New customer welcome,Percent,10,,2026-01-01 00:00:00,2026-12-31 23:59:00,,,
+SUMMER25,Summer sale,Fixed,25,150,2026-06-01 00:00:00,2026-08-31 23:59:00,,,
+FLASH48,48-hour flash sale,Percent,20,,2026-09-18 00:00:00,2026-09-19 23:59:00,60,,
+LONDON15,London autumn route,Percent,15,,2026-09-15 00:00:00,2026-10-31 23:59:00,,,LHR
+APPONLY12,Book in the app,Fixed,12,60,2026-07-01 00:00:00,2026-12-31 23:59:00,,App,
+NYC50,New York launch,Fixed,50,500,2026-08-01 00:00:00,2026-09-30 23:59:00,,,JFK

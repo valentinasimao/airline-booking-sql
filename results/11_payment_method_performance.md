@@ -4,9 +4,9 @@ Query: [`queries/11_payment_method_performance.sql`](../queries/11_payment_metho
 
 | method | attempts | failure_rate_pct | most_common_reason | checkouts_failed_first_try | recovered_pct | sales_lost_eur |
 |---|---|---|---|---|---|---|
-| Card | 9315 | 24.2 | Card declined | 2137 | 46.5 | 341106 |
-| Apple Pay | 5345 | 15.2 | Card declined | 805 | 15.9 | 202948 |
-| Bizum | 3754 | 17.3 | Insufficient funds | 636 | 25.2 | 139924 |
-| Bank transfer | 4787 | 7.7 | Transfer not received | 366 | 14.2 | 94168 |
-| Google Pay | 1806 | 15 | Card declined | 268 | 23.1 | 61426 |
-| PayPal | 1890 | 16 | Insufficient funds | 292 | 29.5 | 54849 |
+| Card | 9395 | 24.5 | Card declined | 2185 | 47.8 | 339354 |
+| Apple Pay | 5404 | 14.7 | Card declined | 791 | 15.4 | 199409 |
+| Bizum | 3664 | 16.6 | Insufficient funds | 599 | 24 | 135331 |
+| Bank transfer | 4773 | 7.5 | Transfer not received | 355 | 9.9 | 94749 |
+| Google Pay | 1772 | 14.5 | Card declined | 255 | 22.7 | 56807 |
+| PayPal | 1864 | 15.7 | Insufficient funds | 282 | 30.9 | 54006 |

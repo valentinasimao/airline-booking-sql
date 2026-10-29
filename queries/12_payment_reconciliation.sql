@@ -1,14 +1,20 @@
 -- Q12. Payment reconciliation: does what we charged match what we sold, and were cancellations refunded?
 --      Flags tickets issued without payment, double charges, under-charges and refunds still owed.
 -- Techniques: expected-vs-actual CTEs, LEFT JOINs with COALESCE, CASE issue classification
-WITH expected AS (                             -- fares + €12 for each self-selected seat outside Business
+WITH gross AS (                                -- fares + €12 for each self-selected seat outside Business
     SELECT t.booking_id,
            SUM(t.fare_eur)
          + SUM(CASE WHEN sa.assignment_type = 'Selected' AND t.cabin_booked <> 'Business'
-                    THEN 12 ELSE 0 END)                          AS expected_eur
+                    THEN 12 ELSE 0 END)                          AS gross_eur
     FROM tickets t
     LEFT JOIN seat_assignments sa ON sa.ticket_id = t.ticket_id
     GROUP BY t.booking_id
+),
+expected AS (                                  -- minus any promo discount actually given
+    SELECT g.booking_id,
+           g.gross_eur - COALESCE(bp.discount_eur, 0)            AS expected_eur
+    FROM gross g
+    LEFT JOIN booking_promotions bp ON bp.booking_id = g.booking_id
 ),
 captured AS (
     SELECT booking_id, SUM(amount_eur) AS paid_eur, COUNT(*) AS captures

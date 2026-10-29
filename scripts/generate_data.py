@@ -193,6 +193,23 @@ reason_w = {"Card":[40,35,20,5,0],"PayPal":[30,0,40,30,0],"Bizum":[20,0,50,30,0]
             "Apple Pay":[50,0,30,20,0],"Google Pay":[50,0,30,20,0],"Bank transfer":[0,0,0,0,100]}
 STEPS = ["Search","Seats","Passenger details","Payment","Paid"]
 
+# promo codes (fictional campaigns): code, campaign, type, value, min spend, valid from, valid to, max uses, channel, destination
+promos = [
+    ("WELCOME10", "New customer welcome",  "Percent", 10, None, datetime(2026,1,1),  datetime(2026,12,31,23,59), None, None,  None),
+    ("SUMMER25",  "Summer sale",           "Fixed",   25, 150,  datetime(2026,6,1),  datetime(2026,8,31,23,59),  None, None,  None),
+    ("FLASH48",   "48-hour flash sale",    "Percent", 20, None, datetime(2026,9,18), datetime(2026,9,19,23,59),  60,   None,  None),
+    ("LONDON15",  "London autumn route",   "Percent", 15, None, datetime(2026,9,15), datetime(2026,10,31,23,59), None, None,  "LHR"),
+    ("APPONLY12", "Book in the app",       "Fixed",   12, 60,   datetime(2026,7,1),  datetime(2026,12,31,23,59), None, "App", None),
+    ("NYC50",     "New York launch",       "Fixed",   50, 500,  datetime(2026,8,1),  datetime(2026,9,30,23,59),  None, None,  "JFK"),
+]
+def promo_ok(pr, when, channel, dest, gross):
+    code, _, _, _, min_spend, vf, vt, _, ch, de = pr
+    return vf <= when <= vt and (ch is None or ch == channel) and (de is None or de == dest) \
+           and (min_spend is None or gross >= min_spend)
+def promo_discount(pr, gross):
+    return round(gross * pr[3] / 100, 2) if pr[2] == "Percent" else float(min(pr[3], gross))
+booking_promos = []
+
 sessions, payments, refunds = [], [], []   # payments: [session_key, booking_id, attempt, ts, method, amount, status, reason]
 ref_id = 0
 
@@ -215,6 +232,22 @@ for b in bookings:
     key = len(sessions)
     sessions.append([key, booked_at - timedelta(minutes=rng.randint(4, 25)), channel, btix[0][3], len(btix), "Paid", bid_])
     expected = round(sum(x[5] for x in btix) + sum(SEAT_FEE for x in btix if x[0] in selected and x[4] != "Business"), 2)
+    dest_ = flight_by_id[btix[0][3]][3]
+    if rng.random() < 0.20 and channel != "Agency":               # customer types a promo code
+        valid = [pr for pr in promos if promo_ok(pr, booked_at, channel, dest_, expected)]
+        if rng.random() < 0.05:                                   # data issue: the site accepted a code it shouldn't have
+            pr = rng.choice(promos)
+        elif valid:
+            weights = [6 if pr[0] in ("FLASH48", "NYC50", "LONDON15") else 1 for pr in valid]
+            pr = rng.choices(valid, weights)[0]
+        else:
+            pr = None
+        if pr:
+            disc = promo_discount(pr, expected)
+            if rng.random() < 0.03:                               # data issue: discount applied per passenger
+                disc = round(min(disc * len(btix), expected), 2)
+            booking_promos.append([bid_, pr[0], booked_at, expected, disc])
+            expected = round(expected - disc, 2)
     first_row = len(payments)
     n, method, _ = failed_attempts(key, channel, booked_at - timedelta(minutes=rng.randint(2, 9)), expected, 3)
     for p_ in payments[first_row:]: p_[1] = bid_
@@ -269,4 +302,7 @@ ref_rows = [[r[0], pay_id[r[1]]] + r[2:] for r in refunds]
 write("checkout_sessions", ["session_id","started_at","channel","flight_id","passenger_count","furthest_step","booking_id"], sess_rows)
 write("payments", ["payment_id","session_id","booking_id","attempt_no","attempted_at","method","amount_eur","status","failure_reason"], pay_rows)
 write("refunds", ["refund_id","payment_id","ticket_id","refunded_at","amount_eur","reason"], ref_rows)
-print(f"sessions={len(sess_rows)} payments={len(pay_rows)} refunds={len(ref_rows)}")
+write("promo_codes", ["promo_code","campaign","discount_type","discount_value","min_spend_eur","valid_from","valid_to",
+                      "max_uses","channel_only","destination_only"], promos)
+write("booking_promotions", ["booking_id","promo_code","redeemed_at","gross_eur","discount_eur"], booking_promos)
+print(f"sessions={len(sess_rows)} payments={len(pay_rows)} refunds={len(ref_rows)} promo_uses={len(booking_promos)}")

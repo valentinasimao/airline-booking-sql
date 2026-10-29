@@ -4,18 +4,18 @@ Query: [`queries/10_checkout_funnel.sql`](../queries/10_checkout_funnel.sql) · 
 
 | channel | step_no | step_name | sessions | pct_of_searches | pct_from_previous_step | lost_at_this_step |
 |---|---|---|---|---|---|---|
-| Agency | 1 | Search | 11491 | 100 |  |  |
-| Agency | 2 | Seats | 7233 | 62.9 | 62.9 | 4258 |
-| Agency | 3 | Passenger details | 6238 | 54.3 | 86.2 | 995 |
-| Agency | 4 | Payment | 5136 | 44.7 | 82.3 | 1102 |
-| Agency | 5 | Paid | 4424 | 38.5 | 86.1 | 712 |
-| App | 1 | Search | 23176 | 100 |  |  |
-| App | 2 | Seats | 16841 | 72.7 | 72.7 | 6335 |
-| App | 3 | Passenger details | 14764 | 63.7 | 87.7 | 2077 |
-| App | 4 | Payment | 11919 | 51.4 | 80.7 | 2845 |
-| App | 5 | Paid | 8933 | 38.5 | 74.9 | 2986 |
-| Web | 1 | Search | 22977 | 100 |  |  |
-| Web | 2 | Seats | 17073 | 74.3 | 74.3 | 5904 |
-| Web | 3 | Passenger details | 14219 | 61.9 | 83.3 | 2854 |
-| Web | 4 | Payment | 11680 | 50.8 | 82.1 | 2539 |
-| Web | 5 | Paid | 8928 | 38.9 | 76.4 | 2752 |
+| Agency | 1 | Search | 11536 | 100 |  |  |
+| Agency | 2 | Seats | 7261 | 62.9 | 62.9 | 4275 |
+| Agency | 3 | Passenger details | 6246 | 54.1 | 86 | 1015 |
+| Agency | 4 | Payment | 5149 | 44.6 | 82.4 | 1097 |
+| Agency | 5 | Paid | 4424 | 38.3 | 85.9 | 725 |
+| App | 1 | Search | 23064 | 100 |  |  |
+| App | 2 | Seats | 16704 | 72.4 | 72.4 | 6360 |
+| App | 3 | Passenger details | 14650 | 63.5 | 87.7 | 2054 |
+| App | 4 | Payment | 11862 | 51.4 | 81 | 2788 |
+| App | 5 | Paid | 8933 | 38.7 | 75.3 | 2929 |
+| Web | 1 | Search | 23051 | 100 |  |  |
+| Web | 2 | Seats | 17103 | 74.2 | 74.2 | 5948 |
+| Web | 3 | Passenger details | 14256 | 61.8 | 83.4 | 2847 |
+| Web | 4 | Payment | 11707 | 50.8 | 82.1 | 2549 |
+| Web | 5 | Paid | 8928 | 38.7 | 76.3 | 2779 |

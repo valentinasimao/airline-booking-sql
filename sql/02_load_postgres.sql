@@ -11,3 +11,5 @@
 \copy checkout_sessions FROM 'data/checkout_sessions.csv' CSV HEADER
 \copy payments          FROM 'data/payments.csv'          CSV HEADER
 \copy refunds           FROM 'data/refunds.csv'           CSV HEADER
+\copy promo_codes        FROM 'data/promo_codes.csv'        CSV HEADER
+\copy booking_promotions FROM 'data/booking_promotions.csv' CSV HEADER

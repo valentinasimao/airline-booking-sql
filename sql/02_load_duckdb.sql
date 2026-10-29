@@ -11,3 +11,5 @@ COPY upgrade_requests  FROM 'data/upgrade_requests.csv'  (HEADER);
 COPY checkout_sessions FROM 'data/checkout_sessions.csv' (HEADER);
 COPY payments          FROM 'data/payments.csv'          (HEADER);
 COPY refunds           FROM 'data/refunds.csv'           (HEADER);
+COPY promo_codes        FROM 'data/promo_codes.csv'        (HEADER);
+COPY booking_promotions FROM 'data/booking_promotions.csv' (HEADER);

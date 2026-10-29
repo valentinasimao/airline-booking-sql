@@ -121,3 +121,26 @@ CREATE TABLE refunds (
     amount_eur   DECIMAL(9,2)  NOT NULL,
     reason       VARCHAR(40)   NOT NULL
 );
+
+-- Promo codes and the rules they must follow (NULL = no restriction)
+CREATE TABLE promo_codes (
+    promo_code        VARCHAR(12)   PRIMARY KEY,
+    campaign          VARCHAR(40)   NOT NULL,
+    discount_type     VARCHAR(7)    NOT NULL CHECK (discount_type IN ('Percent','Fixed')),
+    discount_value    DECIMAL(6,2)  NOT NULL,      -- % or € depending on type
+    min_spend_eur     DECIMAL(8,2),
+    valid_from        TIMESTAMP     NOT NULL,
+    valid_to          TIMESTAMP     NOT NULL,
+    max_uses          INTEGER,
+    channel_only      VARCHAR(10),
+    destination_only  CHAR(3)
+);
+
+-- A promo code applied to a booking. gross = fares + seat fees before the discount.
+CREATE TABLE booking_promotions (
+    booking_id    INTEGER       PRIMARY KEY REFERENCES bookings(booking_id),
+    promo_code    VARCHAR(12)   NOT NULL REFERENCES promo_codes(promo_code),
+    redeemed_at   TIMESTAMP     NOT NULL,
+    gross_eur     DECIMAL(9,2)  NOT NULL,
+    discount_eur  DECIMAL(9,2)  NOT NULL
+);
