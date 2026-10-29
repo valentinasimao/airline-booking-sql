@@ -1,0 +1,170 @@
+"""
+Generates a realistic, reproducible sample dataset for the airline seat-management project.
+Output: CSV files in ../data (one per table). Run:  python scripts/generate_data.py
+"""
+import csv, random, string
+from datetime import datetime, timedelta, date
+from pathlib import Path
+
+random.seed(42)
+OUT = Path(__file__).resolve().parent.parent / "data"
+OUT.mkdir(exist_ok=True)
+TODAY = datetime(2026, 10, 29, 6, 0)
+
+def write(name, header, rows):
+    with open(OUT / f"{name}.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f); w.writerow(header); w.writerows(rows)
+
+# ---------------- airports ----------------
+airports = [("BCN","Barcelona","Spain"),("MAD","Madrid","Spain"),("LIS","Lisbon","Portugal"),
+            ("FCO","Rome","Italy"),("CDG","Paris","France"),("LHR","London","United Kingdom"),
+            ("JFK","New York","United States"),("GRU","São Paulo","Brazil")]
+write("airports", ["airport_code","city","country"], airports)
+
+# ---------------- aircraft & seat maps ----------------
+# layout: list of (cabin, first_row, last_row, letters, aisle_letters, exit_rows)
+layouts = {
+    1: ("Airbus A320neo", [("Business",1,4,"ACDF","CD",[]), ("Economy",5,31,"ABCDEF","CD",[12,13])]),
+    2: ("Boeing 737-800", [("Business",1,3,"ACDF","CD",[]), ("Economy",4,32,"ABCDEF","CD",[15,16])]),
+    3: ("Airbus A330-300",[("Business",1,6,"ADGK","DG",[]), ("Premium",10,14,"ACDEFGHK","CDGH",[]),
+                           ("Economy",20,45,"ABCDEFGHK","CDFG",[20,33])]),
+}
+aircraft_rows, seat_rows, seats_by_type = [], [], {}
+for at_id,(model,cabins) in layouts.items():
+    seats=[]
+    for cabin,r1,r2,letters,aisles,exits in cabins:
+        for r in range(r1, r2+1):
+            for i,l in enumerate(letters):
+                if i==0 or i==len(letters)-1: st="Window"
+                elif l in aisles: st="Aisle"
+                else: st="Middle"
+                seats.append((at_id,f"{r}{l}",r,l,i+1,cabin,st,r in exits))
+    seats_by_type[at_id]=seats; seat_rows+=seats
+    aircraft_rows.append((at_id,model,len(seats)))
+write("aircraft_types", ["aircraft_type_id","model","total_seats"], aircraft_rows)
+write("seat_map", ["aircraft_type_id","seat_no","row_no","seat_letter","letter_pos","cabin","seat_type","is_exit_row"], seat_rows)
+
+# ---------------- flights ----------------
+routes = [("MAD",1,"ZZ1001",[7,13,19]),("LIS",2,"ZZ1201",[9,17]),("FCO",1,"ZZ1301",[8,16]),
+          ("CDG",2,"ZZ1401",[7,18]),("LHR",1,"ZZ1501",[10]),("JFK",3,"ZZ2001",[11]),("GRU",3,"ZZ2101",[23])]
+flights=[]; fid=0
+start = date(2026,10,15)
+for d in range(21):
+    day = start + timedelta(days=d)
+    for dest,at,fno,hours in routes:
+        if dest in ("JFK","GRU") and d % 2: continue          # long-haul every other day
+        for k,h in enumerate(hours):
+            fid+=1
+            dep = datetime(day.year,day.month,day.day,h,random.choice([0,15,30,45]))
+            flights.append([fid, fno[:-1]+str(int(fno[-1])+k*2), "BCN", dest, dep, at,
+                            "Departed" if dep < TODAY else "Scheduled"])
+write("flights", ["flight_id","flight_no","origin","destination","departure_ts","aircraft_type_id","status"], flights)
+
+# ---------------- passengers ----------------
+first = ["Laura","Marc","Júlia","Pau","Sofia","Jordi","Marta","David","Ana","Pedro","Lucía","Carlos","Emma","Luca",
+         "Giulia","Matteo","Chloé","Hugo","Olivia","James","Mia","Noah","Beatriz","João","Mariana","Rafael","Elena","Àlex"]
+last = ["García","Martínez","Puig","Ferrer","Rossi","Bianchi","Dubois","Martin","Smith","Johnson","Silva","Santos",
+        "Oliveira","Costa","López","Sánchez","Vidal","Serra","Romano","Moreau","Brown","Wilson","Pereira","Ribeiro"]
+tiers = (["None"]*60)+(["Silver"]*22)+(["Gold"]*13)+(["Platinum"]*5)
+passengers=[]
+for pid in range(1, 6501):
+    tier=random.choice(tiers)
+    pts={"None":random.randint(0,4000),"Silver":random.randint(5000,20000),
+         "Gold":random.randint(20000,60000),"Platinum":random.randint(60000,150000)}[tier]
+    passengers.append([pid, random.choice(first), random.choice(last),
+                       date(1950,1,1)+timedelta(days=random.randint(0,365*55)), tier, pts])
+pmap={p[0]:p for p in passengers}
+
+def child_birth(dep):  # child aged 4-13 at departure
+    return (dep - timedelta(days=random.randint(4*365, 13*365))).date()
+
+# ---------------- bookings, tickets, seats ----------------
+fare_base={"Business":(380,900),"Premium":(250,520),"Economy":(45,260)}
+longhaul_mult={1:1.0,2:1.0,3:2.6}
+bookings, tickets, seat_assign, upgrades = [], [], [], []
+bid=tid=rid=0; used_refs=set(); next_pid=1
+def new_ref():
+    while True:
+        r="".join(random.choices(string.ascii_uppercase+string.digits,k=6))
+        if r not in used_refs: used_refs.add(r); return r
+
+for f in flights:
+    fid_, _, _, dest, dep, at, status = f
+    seats = seats_by_type[at]
+    by_cabin={}
+    for s in seats: by_cabin.setdefault(s[5],[]).append(s)
+    taken=set(); flight_pax=set()
+    for cabin, cseats in by_cabin.items():
+        cap=len(cseats)
+        load = random.uniform(0.62, 1.12) if cabin=="Economy" else random.uniform(0.45, 0.95)
+        if cabin=="Economy" and status=="Scheduled" and random.random()<0.1: load=random.uniform(1.14,1.22)  # peak demand
+        n_tix = int(cap*load)
+        sold=0
+        while sold < n_tix:
+            bid+=1; group=random.choices([1,2,3,4],[55,25,12,8])[0]
+            booked_at = dep - timedelta(days=random.randint(1,90), hours=random.randint(0,23))
+            bookings.append([bid,new_ref(),booked_at,random.choice(["Web","Web","App","App","Agency"])])
+            family_children = group>=3 and random.random()<0.6
+            lead_last=None; group_tix=[]
+            for g in range(group):
+                if sold>=n_tix: break
+                pid=random.randint(1,6500)
+                while pid in flight_pax: pid=random.randint(1,6500)
+                if g==0: lead_last=pmap[pid][2]
+                is_child = family_children and g>=2
+                if is_child:                            # child traveller: new passenger record
+                    pid=len(passengers)+1
+                    passengers.append([pid, random.choice(first), lead_last, child_birth(dep), "None", 0])
+                flight_pax.add(pid); tid+=1; sold+=1
+                lo,hi=fare_base[cabin]; fare=round(random.uniform(lo,hi)*longhaul_mult[at],2)
+                pref=random.choices(["Window","Aisle",None],[38,30,32])[0]
+                if status=="Departed":
+                    st=random.choices(["Boarded","NoShow","Cancelled"],[90,6,4])[0]
+                else:
+                    st=random.choices(["Confirmed","Cancelled"],[95,5])[0]
+                tickets.append([tid,bid,pid,fid_,cabin,fare,pref,st])
+                group_tix.append((tid,pref,st,is_child))
+                if status=="Scheduled" and st=="Confirmed" and cabin!="Business" and random.random()<0.05:
+                    rid+=1
+                    upgrades.append([rid,tid,"Business" if cabin=="Economy" or random.random()<.7 else "Premium",
+                                     dep-timedelta(days=random.randint(0,10),hours=random.randint(0,23))])
+            # ---- seat the group ----
+            seatable=[x for x in group_tix if x[2]!="Cancelled" and (status=="Departed" or random.random()<0.72)]
+            if not seatable: continue
+            free=[s for s in cseats if s[1] not in taken]
+            has_child=any(x[3] for x in seatable)
+            chosen=[]
+            if len(seatable)>1 and random.random()<0.88:          # most groups sit together
+                rows={}
+                for s_ in free:
+                    if has_child and s_[7]: continue
+                    rows.setdefault(s_[2],[]).append(s_)
+                blocks=[]
+                for r,ss in rows.items():
+                    ss=sorted(ss,key=lambda z:z[4])
+                    for i in range(len(ss)-len(seatable)+1):
+                        blk=ss[i:i+len(seatable)]
+                        if all(blk[k+1][4]-blk[k][4]==1 for k in range(len(blk)-1)): blocks.append(blk)
+                if blocks: chosen=random.choice(blocks)
+            atype=random.choices(["Selected","Auto"],[70,30])[0]
+            for i,(tid_,pref,st,is_child) in enumerate(seatable):
+                if chosen: seat=chosen[i]
+                else:
+                    free=[s_ for s_ in cseats if s_[1] not in taken and not (is_child and s_[7])]
+                    if is_child and random.random()<0.015:        # rare data-quality issue to detect
+                        ex=[s_ for s_ in cseats if s_[1] not in taken and s_[7]]
+                        free=ex or free
+                    if not free: break
+                    hit = 0.9 if atype=="Selected" else 0.45
+                    cand=[s_ for s_ in free if pref and s_[6]==pref] if random.random()<hit else []
+                    seat=random.choice(cand or free)
+                taken.add(seat[1])
+                seat_assign.append([tid_,fid_,seat[1],booked_at+timedelta(hours=random.randint(1,48)),atype])
+
+write("passengers", ["passenger_id","first_name","last_name","birth_date","loyalty_tier","loyalty_points"], passengers)
+write("bookings", ["booking_id","booking_ref","booked_at","channel"], bookings)
+write("tickets", ["ticket_id","booking_id","passenger_id","flight_id","cabin_booked","fare_eur","seat_preference","status"], tickets)
+write("seat_assignments", ["ticket_id","flight_id","seat_no","assigned_at","assignment_type"], seat_assign)
+write("upgrade_requests", ["request_id","ticket_id","requested_cabin","requested_at"], upgrades)
+print(f"flights={len(flights)} passengers={len(passengers)} bookings={len(bookings)} tickets={len(tickets)} "
+      f"seats={len(seat_assign)} upgrades={len(upgrades)}")
