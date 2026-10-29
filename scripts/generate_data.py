@@ -103,6 +103,8 @@ for f in flights:
         while sold < n_tix:
             bid+=1; group=random.choices([1,2,3,4],[55,25,12,8])[0]
             booked_at = dep - timedelta(days=random.randint(1,90), hours=random.randint(0,23))
+            if booked_at > TODAY:                    # nobody can book in the future
+                booked_at = TODAY - timedelta(hours=1 + bid % 72)
             bookings.append([bid,new_ref(),booked_at,random.choice(["Web","Web","App","App","Agency"])])
             family_children = group>=3 and random.random()<0.6
             lead_last=None; group_tix=[]
@@ -127,7 +129,8 @@ for f in flights:
                 if status=="Scheduled" and st=="Confirmed" and cabin!="Business" and random.random()<0.05:
                     rid+=1
                     upgrades.append([rid,tid,"Business" if cabin=="Economy" or random.random()<.7 else "Premium",
-                                     dep-timedelta(days=random.randint(0,10),hours=random.randint(0,23))])
+                                     min(dep-timedelta(days=random.randint(0,10),hours=random.randint(0,23)),
+                                         TODAY-timedelta(minutes=rid))])
             # ---- seat the group ----
             seatable=[x for x in group_tix if x[2]!="Cancelled" and (status=="Departed" or random.random()<0.72)]
             if not seatable: continue
@@ -159,7 +162,7 @@ for f in flights:
                     cand=[s_ for s_ in free if pref and s_[6]==pref] if random.random()<hit else []
                     seat=random.choice(cand or free)
                 taken.add(seat[1])
-                seat_assign.append([tid_,fid_,seat[1],booked_at+timedelta(hours=random.randint(1,48)),atype])
+                seat_assign.append([tid_,fid_,seat[1],min(booked_at+timedelta(hours=random.randint(1,48)),TODAY),atype])
 
 write("passengers", ["passenger_id","first_name","last_name","birth_date","loyalty_tier","loyalty_points"], passengers)
 write("bookings", ["booking_id","booking_ref","booked_at","channel"], bookings)
@@ -168,3 +171,102 @@ write("seat_assignments", ["ticket_id","flight_id","seat_no","assigned_at","assi
 write("upgrade_requests", ["request_id","ticket_id","requested_cabin","requested_at"], upgrades)
 print(f"flights={len(flights)} passengers={len(passengers)} bookings={len(bookings)} tickets={len(tickets)} "
       f"seats={len(seat_assign)} upgrades={len(upgrades)}")
+
+
+# ======================================================================
+# Booking website: checkout sessions, payment attempts and refunds
+# (separate random stream so the seat data above stays identical)
+# ======================================================================
+rng = random.Random(2026)
+SEAT_FEE = 12.00                     # fee for choosing your own seat (not charged in Business)
+flight_by_id = {f[0]: f for f in flights}
+tix_by_booking = {}
+for t_ in tickets: tix_by_booking.setdefault(t_[1], []).append(t_)
+selected = {s[0] for s in seat_assign if s[4] == "Selected"}
+
+methods = {"Web": ["Card","Card","Card","PayPal","Bizum","Apple Pay"],
+           "App": ["Card","Card","Apple Pay","Apple Pay","Google Pay","Bizum"],
+           "Agency": ["Bank transfer"]}
+fail_rate = {"Card":0.14,"PayPal":0.06,"Bizum":0.05,"Apple Pay":0.03,"Google Pay":0.04,"Bank transfer":0.01}
+reasons = ["Card declined","3-D Secure failed","Insufficient funds","Timeout","Transfer not received"]
+reason_w = {"Card":[40,35,20,5,0],"PayPal":[30,0,40,30,0],"Bizum":[20,0,50,30,0],
+            "Apple Pay":[50,0,30,20,0],"Google Pay":[50,0,30,20,0],"Bank transfer":[0,0,0,0,100]}
+STEPS = ["Search","Seats","Passenger details","Payment","Paid"]
+
+sessions, payments, refunds = [], [], []   # payments: [session_key, booking_id, attempt, ts, method, amount, status, reason]
+ref_id = 0
+
+def failed_attempts(key, channel, t0, amount, max_tries):
+    """Simulate failed attempts; returns (n_attempts, method, time)."""
+    method = rng.choice(methods[channel]); n = 0
+    while n < max_tries and rng.random() < fail_rate[method]:
+        n += 1
+        payments.append([key, None, n, t0, method, amount, "Failed", rng.choices(reasons, reason_w[method])[0]])
+        t0 += timedelta(minutes=rng.randint(1, 4))
+        if rng.random() < 0.35 and method != "Bank transfer":     # customer tries another method
+            method = rng.choice([m for m in methods[channel] if m != method] or [method])
+    return n, method, t0
+
+# --- sessions that became a booking ---
+for b in bookings:
+    bid_, ref, booked_at, channel = b
+    btix = tix_by_booking.get(bid_, [])
+    if not btix: continue
+    key = len(sessions)
+    sessions.append([key, booked_at - timedelta(minutes=rng.randint(4, 25)), channel, btix[0][3], len(btix), "Paid", bid_])
+    expected = round(sum(x[5] for x in btix) + sum(SEAT_FEE for x in btix if x[0] in selected and x[4] != "Business"), 2)
+    first_row = len(payments)
+    n, method, _ = failed_attempts(key, channel, booked_at - timedelta(minutes=rng.randint(2, 9)), expected, 3)
+    for p_ in payments[first_row:]: p_[1] = bid_
+    r = rng.random()
+    if r < 0.004:                       # data issue: tickets issued but payment never captured
+        continue
+    amount = expected
+    if 0.004 <= r < 0.007: amount = round(expected - rng.choice([SEAT_FEE, 20.0, 35.5]), 2)   # under-charged
+    payments.append([key, bid_, n + 1, booked_at, method, amount, "Succeeded", None])
+    paid_row = len(payments) - 1
+    if 0.007 <= r < 0.010:              # data issue: the same booking captured twice
+        payments.append([key, bid_, n + 2, booked_at + timedelta(seconds=rng.randint(5, 50)),
+                         method, amount, "Succeeded", None])
+    for x in btix:                      # refunds for cancelled tickets (€30 fee in Economy)
+        if x[7] != "Cancelled": continue
+        if rng.random() < 0.10: continue                          # data issue: refund never issued
+        latest = min(flight_by_id[x[3]][4], TODAY)
+        when = (booked_at + (latest - booked_at) * rng.uniform(0.2, 0.95)).replace(microsecond=0)
+        fee = 30.0 if x[4] == "Economy" else 0.0
+        ref_id += 1
+        refunds.append([ref_id, paid_row, x[0], when, round(x[5] - fee, 2), "Passenger cancellation"])
+
+# --- abandoned checkouts (people who looked but did not pay) ---
+for _ in range(int(len(sessions) * 1.6)):
+    f = rng.choice(flights)
+    started = f[4] - timedelta(days=rng.randint(1, 90), minutes=rng.randint(0, 1439))
+    if started > TODAY: continue
+    channel = rng.choice(["Web","Web","App","App","Agency"])
+    w = {"Web":[42,20,18,20],"App":[45,14,20,21],"Agency":[60,15,15,10]}[channel]
+    step = rng.choices(STEPS[:4], w)[0]
+    pax = rng.choices([1,2,3,4],[55,25,12,8])[0]
+    key = len(sessions)
+    sessions.append([key, started, channel, f[0], pax, step, None])
+    if step == "Payment" and rng.random() < 0.45:                 # tried to pay, payment failed, gave up
+        lo, hi = fare_base["Economy"]
+        amount = round(pax * rng.uniform(lo, hi) * longhaul_mult[f[5]], 2)
+        before = len(payments)
+        failed_attempts(key, channel, started + timedelta(minutes=rng.randint(5, 20)), amount, 1 + rng.randint(0, 2))
+        if len(payments) == before:                               # make sure at least one failure is recorded
+            m = rng.choice(methods[channel])
+            payments.append([key, None, 1, started + timedelta(minutes=8), m, amount, "Failed",
+                             rng.choices(reasons, reason_w[m])[0]])
+
+# number sessions in time order, then payments in time order
+order = sorted(range(len(sessions)), key=lambda k: sessions[k][1])
+new_id = {k: i + 1 for i, k in enumerate(order)}
+sess_rows = [[new_id[s[0]]] + s[1:] for s in sorted(sessions, key=lambda s: s[1])]
+pay_order = sorted(range(len(payments)), key=lambda i: (payments[i][3], i))
+pay_id = {i: n + 1 for n, i in enumerate(pay_order)}
+pay_rows = [[pay_id[i], new_id[payments[i][0]]] + payments[i][1:] for i in pay_order]
+ref_rows = [[r[0], pay_id[r[1]]] + r[2:] for r in refunds]
+write("checkout_sessions", ["session_id","started_at","channel","flight_id","passenger_count","furthest_step","booking_id"], sess_rows)
+write("payments", ["payment_id","session_id","booking_id","attempt_no","attempted_at","method","amount_eur","status","failure_reason"], pay_rows)
+write("refunds", ["refund_id","payment_id","ticket_id","refunded_at","amount_eur","reason"], ref_rows)
+print(f"sessions={len(sess_rows)} payments={len(pay_rows)} refunds={len(ref_rows)}")

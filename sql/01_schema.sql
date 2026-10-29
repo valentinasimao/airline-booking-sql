@@ -81,3 +81,43 @@ CREATE TABLE upgrade_requests (
     requested_cabin  VARCHAR(10)  NOT NULL,
     requested_at     TIMESTAMP    NOT NULL
 );
+
+-- ---------------------------------------------------------------------
+-- Booking website: checkout funnel, payments and refunds
+-- ---------------------------------------------------------------------
+
+-- One visit to the booking flow. booking_id is filled only when the customer paid.
+CREATE TABLE checkout_sessions (
+    session_id       INTEGER      PRIMARY KEY,
+    started_at       TIMESTAMP    NOT NULL,
+    channel          VARCHAR(10)  NOT NULL CHECK (channel IN ('Web','App','Agency')),
+    flight_id        INTEGER      NOT NULL REFERENCES flights(flight_id),
+    passenger_count  INTEGER      NOT NULL,
+    furthest_step    VARCHAR(20)  NOT NULL CHECK (furthest_step IN
+                         ('Search','Seats','Passenger details','Payment','Paid')),
+    booking_id       INTEGER      REFERENCES bookings(booking_id)
+);
+
+-- Every payment attempt, successful or not. Amount = fares + €12 per self-selected seat (not in Business).
+-- booking_id is empty when the customer gave up after a failed payment (no booking was created).
+CREATE TABLE payments (
+    payment_id      INTEGER       PRIMARY KEY,
+    session_id      INTEGER       NOT NULL REFERENCES checkout_sessions(session_id),
+    booking_id      INTEGER       REFERENCES bookings(booking_id),
+    attempt_no      INTEGER       NOT NULL,
+    attempted_at    TIMESTAMP     NOT NULL,
+    method          VARCHAR(15)   NOT NULL,       -- Card, PayPal, Bizum, Apple Pay, Google Pay, Bank transfer
+    amount_eur      DECIMAL(9,2)  NOT NULL,
+    status          VARCHAR(10)   NOT NULL CHECK (status IN ('Succeeded','Failed')),
+    failure_reason  VARCHAR(30)
+);
+
+-- Money returned for a cancelled ticket (Economy keeps a €30 cancellation fee)
+CREATE TABLE refunds (
+    refund_id    INTEGER       PRIMARY KEY,
+    payment_id   INTEGER       NOT NULL REFERENCES payments(payment_id),
+    ticket_id    INTEGER       NOT NULL REFERENCES tickets(ticket_id),
+    refunded_at  TIMESTAMP     NOT NULL,
+    amount_eur   DECIMAL(9,2)  NOT NULL,
+    reason       VARCHAR(40)   NOT NULL
+);

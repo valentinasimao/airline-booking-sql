@@ -8,3 +8,6 @@ COPY bookings          FROM 'data/bookings.csv'          (HEADER);
 COPY tickets           FROM 'data/tickets.csv'           (HEADER);
 COPY seat_assignments  FROM 'data/seat_assignments.csv'  (HEADER);
 COPY upgrade_requests  FROM 'data/upgrade_requests.csv'  (HEADER);
+COPY checkout_sessions FROM 'data/checkout_sessions.csv' (HEADER);
+COPY payments          FROM 'data/payments.csv'          (HEADER);
+COPY refunds           FROM 'data/refunds.csv'           (HEADER);

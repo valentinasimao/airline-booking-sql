@@ -8,3 +8,6 @@
 \copy tickets           FROM 'data/tickets.csv'           CSV HEADER
 \copy seat_assignments  FROM 'data/seat_assignments.csv'  CSV HEADER
 \copy upgrade_requests  FROM 'data/upgrade_requests.csv'  CSV HEADER
+\copy checkout_sessions FROM 'data/checkout_sessions.csv' CSV HEADER
+\copy payments          FROM 'data/payments.csv'          CSV HEADER
+\copy refunds           FROM 'data/refunds.csv'           CSV HEADER
